@@ -1,5 +1,6 @@
 import random
 import string
+import socket
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from supabase import create_client, Client
@@ -12,6 +13,18 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secretkey'
+
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))  # Connect to a remote DNS server to determine the local IP
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except Exception as e:
+        return None
+
 
 # Home
 @app.route('/')
@@ -26,6 +39,41 @@ def index():
     except Exception as e:
         flash(f"Error: {str(e)}", "danger")
         return redirect(url_for('index'))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        try:
+            response = supabase.table('users').select("*").eq("username", username).single().execute()
+            user = response.data
+
+            if not user or not check_password_hash(user['password'], password):
+                flash("Invalid credentials", "danger")
+                return redirect(url_for('login'))
+
+            session['user_id'] = user['id']
+
+            # Get the local IP using the function
+            local_ip = get_local_ip()
+            if local_ip:
+                # Save the local IP address to Supabase
+                supabase.table('users').update({
+                    "local_ip": local_ip
+                }).eq("id", user['id']).execute()
+
+            flash("Login successful!", "success")
+            return redirect(url_for('file_sharing'))
+
+        except Exception as e:
+            flash(f"Error: {str(e)}", "danger")
+            return redirect(url_for('login'))
+
+    return render_template('login.html')
+    
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -59,37 +107,6 @@ def signup():
             return redirect(url_for('signup'))
 
     return render_template('signup.html')
-
-# Login
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-
-        try:
-            response = supabase.table('users').select("*").eq("username", username).single().execute()
-            user = response.data
-
-            if not user or not check_password_hash(user['password'], password):
-                flash("Invalid credentials", "danger")
-                return redirect(url_for('login'))
-
-            session['user_id'] = user['id']
-
-            # Save IP
-            supabase.table('users').update({
-                "local_ip": request.remote_addr
-            }).eq("id", user['id']).execute()
-
-            flash("Login successful!", "success")
-            return redirect(url_for('file_sharing'))
-
-        except Exception as e:
-            flash(f"Error: {str(e)}", "danger")
-            return redirect(url_for('login'))
-
-    return render_template('login.html')
 
 # Generate pairing key
 @app.route('/generate_key', methods=['POST'])
