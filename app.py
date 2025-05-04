@@ -10,7 +10,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SECRET_KEY'] = 'secretkey'
 db = SQLAlchemy(app)
 
-# User model (update this class)
+# User model
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(120), unique=True, nullable=False)
@@ -19,7 +19,7 @@ class User(db.Model):
     pairing_key = db.Column(db.String(120), unique=True, nullable=True)
     paired_with_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     local_ip = db.Column(db.String(120), nullable=True)
-    paired_user = db.relationship('User', remote_side=[id], uselist=False)
+    partner_ip = db.Column(db.String(120), nullable=True)
 
 # Home
 @app.route('/')
@@ -27,21 +27,25 @@ def index():
     users = User.query.all()
     return render_template('index.html', users=users)
 
-# Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form.get('username')
+        password = request.form.get('password')
+
         user = User.query.filter_by(username=username).first()
-        
-        if user and check_password_hash(user.password, password):
-            session['user_id'] = user.id
-            return redirect(url_for('file_sharing'))
-        else:
-            flash("Invalid credentials!", "danger")
-    
+        if not user or not check_password_hash(user.password, password):
+            flash("Invalid Credentials", "danger")
+            return redirect(url_for('login'))
+
+        user.local_ip = request.remote_addr
+        db.session.commit()
+
+        session['user_id'] = user.id
+        return redirect(url_for('file_sharing'))
+
     return render_template('login.html')
+
 
 # Generate pairing key via AJAX
 @app.route('/generate_key', methods=['POST'])
@@ -61,6 +65,39 @@ def generate_key():
 
     return jsonify({'pairing_key': pairing_key})
 
+@app.route('/pair', methods=['POST'])
+def pair():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    target_key = request.json.get('pairing_key')
+    user = User.query.get(user_id)
+    partner = User.query.filter_by(pairing_key=target_key).first()
+
+    if not partner:
+        return jsonify({'error': 'Invalid pairing key'}), 404
+
+    # Capture the user's local IP (if not already captured)
+    local_ip = request.remote_addr  # Get the IP of the client making the request
+
+    # Pair both users with each other
+    user.paired_with_id = partner.id
+    partner.paired_with_id = user.id
+
+    # Exchange local IPs between users
+    user.local_ip = local_ip
+    partner.local_ip = partner.local_ip  # The partner's IP should already be captured at login
+
+    # Commit changes to the database
+    db.session.commit()
+
+    return jsonify({
+        'status': 'paired',
+        'partner_username': partner.username,
+        'partner_ip': partner.local_ip
+    })
+
 # File Sharing Page
 @app.route('/file_sharing', methods=['GET'])
 def file_sharing():
@@ -69,7 +106,9 @@ def file_sharing():
         return redirect(url_for('login'))
 
     user = User.query.get(user_id)
-    return render_template('file_sharing.html', user=user)
+    partner = User.query.get(user.paired_with_id) if user.paired_with_id else None
+
+    return render_template('file_sharing.html', user=user, partner=partner)
 
 # Signup
 @app.route('/signup', methods=['GET', 'POST'])
@@ -122,38 +161,6 @@ def delete(id):
     db.session.commit()
     flash("User deleted successfully", "success")
     return redirect(url_for('index'))
-
-@app.route('/pair', methods=['POST'])
-def pair():
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    target_key = request.json.get('pairing_key')
-    local_ip = request.remote_addr  # IP of the user initiating the request
-
-    user = User.query.get(user_id)
-    partner = User.query.filter_by(pairing_key=target_key).first()
-
-    if not partner:
-        return jsonify({'error': 'Invalid pairing key'}), 404
-
-    # Set pairing (each to each other)
-    user.paired_with_id = partner.id
-    user.local_ip = local_ip  # only set your own IP
-
-    # Only set partner's paired_with_id if it's not already set
-    if not partner.paired_with_id:
-        partner.paired_with_id = user.id
-
-    db.session.commit()
-
-    return jsonify({
-        'status': 'paired',
-        'partner_username': partner.username,
-        'partner_ip': partner.local_ip  # may be None until partner initiates
-    })
-
 
 if __name__ == "__main__":
     with app.app_context():
