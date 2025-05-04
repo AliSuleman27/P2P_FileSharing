@@ -60,8 +60,9 @@ def receive_file_from_sender(save_dir, sender_ip, user_id):
                         break
                     f.write(data)
                     total_received += len(data)
-                    transfer_progress[user_id]['progress'] = int((total_received / (10 * 1024 * 1024)) * 100)  # estimate
-        transfer_progress[user_id]['status'] = 'done'
+                    transfer_progress[user_id]['progress'] = int((total_received / (10 * 1024 * 1024)) * 100)
+                    
+        transfer_progress[user_id]['status'] = 'done'  # Ensure we update to 'done' after receiving
     except Exception as e:
         transfer_progress[user_id] = {'status': 'error', 'message': str(e)}
 
@@ -69,8 +70,18 @@ def receive_file_from_sender(save_dir, sender_ip, user_id):
 
 @app.route('/')
 def index():
-    return redirect(url_for('login'))
-
+    try:
+        response = supabase.table('users').select("*").execute()
+        users = response.data
+        if 'message' in users:  # Handling error message
+            flash(f"Error: {users['message']}", "danger")
+            return redirect(url_for('index'))
+        return render_template('index.html', users=users)
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        return redirect(url_for('index'))
+    
+    
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -184,6 +195,45 @@ def start_receive():
 def progress():
     user_id = session.get('user_id')
     return jsonify(transfer_progress.get(user_id, {}))
+
+# Edit user
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+def edit(id):
+    if request.method == 'POST':
+        updates = {
+            "username": request.form['username'],
+            "email": request.form['email']
+        }
+        if request.form['password']:
+            updates['password'] = generate_password_hash(request.form['password'])
+
+        try:
+            supabase.table('users').update(updates).eq("id", id).execute()
+            flash("User details updated successfully!", "success")
+            return redirect(url_for('index'))
+        except Exception as e:
+            flash(f"Error: {str(e)}", "danger")
+            return redirect(url_for('edit', id=id))
+
+    try:
+        user = supabase.table('users').select("*").eq("id", id).single().execute().data
+        return render_template('edit.html', user=user)
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        return redirect(url_for('index'))
+
+# Delete user
+@app.route('/delete/<int:id>', methods=['GET', 'POST'])
+def delete(id):
+    try:
+        supabase.table('users').delete().eq("id", id).execute()
+        flash("User deleted successfully", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for('index'))
+
+
+
 
 def get_local_ip():
     try:

@@ -17,19 +17,17 @@
     <div class="w-full md:w-2/3 p-8 bg-white rounded-lg shadow-xl flex flex-col items-center gap-8">
         <h3 class="text-2xl font-medium text-gray-800 mb-6">File Sharing</h3>
 
-        <!-- Pairing -->
+        <!-- Pairing Form -->
         {% if not partner %}
-        <form id="pairingForm" class="w-full mb-8">
-            <h4 class="text-xl font-semibold mb-4">Pair with a Partner</h4>
+        <form id="pairingForm" class="w-full mb-8 flex items-center gap-4">
             <input type="text" id="pairingKeyInput" class="p-3 w-full border rounded-lg" placeholder="Enter Partner's Pairing Key" required>
-            <button type="submit" class="p-3 w-full mt-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Pair</button>
+            <button type="submit" class="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Pair</button>
         </form>
 
         <form id="generateKeyForm" class="mb-4">
             <button type="submit" class="p-3 px-6 bg-green-600 text-white rounded-lg hover:bg-green-700">Generate Pairing Key</button>
         </form>
         <p class="text-gray-600 text-center">Click to generate or use a pairing key to connect.</p>
-
         {% else %}
         <div class="text-center">
             <h4 class="text-xl font-semibold mb-2">Paired with</h4>
@@ -39,10 +37,11 @@
         {% endif %}
 
         {% if partner %}
-        <!-- File Transfer Buttons -->
-        <div class="flex flex-col items-center gap-4 w-full">
+        <!-- File Transfer Buttons (Inline with Dotted Border) -->
+        <div class="flex gap-4 w-full border-dotted border-2 border-gray-400 p-4 rounded-lg mb-8">
             <button onclick="sendFile()" class="p-3 w-full bg-blue-500 text-white rounded-lg hover:bg-blue-600">Send File</button>
             <button onclick="receiveFile()" class="p-3 w-full bg-purple-600 text-white rounded-lg hover:bg-purple-700">Receive File</button>
+            <button type="submit" form="generateKeyForm" class="p-3 px-6 bg-green-600 text-white rounded-lg hover:bg-green-700">Generate Key</button>
         </div>
 
         <div id="progressContainer" class="w-full mt-8 hidden">
