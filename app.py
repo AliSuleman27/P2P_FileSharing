@@ -4,6 +4,7 @@ import socket
 import threading
 import random
 import string
+import json
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -21,6 +22,7 @@ transfer_progress = {}
 # ========= File Transfer Logic =========
 def send_file_to_partner(file_path, user_id):
     try:
+        filename = os.path.basename(file_path)
         filesize = os.path.getsize(file_path)
         transfer_progress[user_id] = {'status': 'waiting_for_receiver', 'progress': 0}
 
@@ -29,6 +31,13 @@ def send_file_to_partner(file_path, user_id):
             s.listen(1)
             conn, addr = s.accept()
             with conn:
+                # First send the filename as JSON
+                file_info = json.dumps({'filename': filename, 'filesize': filesize}).encode('utf-8')
+                # Send the size of the file info first, so receiver knows how much to read
+                conn.sendall(len(file_info).to_bytes(4, byteorder='big'))
+                conn.sendall(file_info)
+                
+                # Now send the actual file
                 transfer_progress[user_id]['status'] = 'sending'
                 with open(file_path, 'rb') as f:
                     sent = 0
@@ -46,22 +55,45 @@ def send_file_to_partner(file_path, user_id):
 def receive_file_from_sender(save_dir, sender_ip, user_id):
     try:
         os.makedirs(save_dir, exist_ok=True)
-        file_path = os.path.join(save_dir, f"received_file_{user_id}")
         transfer_progress[user_id] = {'status': 'connecting', 'progress': 0}
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((sender_ip, 9090))
+            
+            # First receive the file info size
+            info_size_bytes = s.recv(4)
+            info_size = int.from_bytes(info_size_bytes, byteorder='big')
+            
+            # Now receive the file info JSON
+            file_info_bytes = b''
+            bytes_received = 0
+            while bytes_received < info_size:
+                chunk = s.recv(min(info_size - bytes_received, 4096))
+                if not chunk:
+                    raise Exception("Connection closed before receiving complete file info")
+                file_info_bytes += chunk
+                bytes_received += len(chunk)
+            
+            file_info = json.loads(file_info_bytes.decode('utf-8'))
+            filename = secure_filename(file_info['filename'])
+            filesize = file_info['filesize']
+            
+            # Now receive the actual file
+            file_path = os.path.join(save_dir, filename)
+            transfer_progress[user_id]['status'] = 'receiving'
+            
             with open(file_path, 'wb') as f:
                 total_received = 0
-                while True:
+                while total_received < filesize:
                     data = s.recv(4096)
                     if not data:
                         break
                     f.write(data)
                     total_received += len(data)
-                    transfer_progress[user_id]['progress'] = int((total_received / (10 * 1024 * 1024)) * 100)
+                    transfer_progress[user_id]['progress'] = int((total_received / filesize) * 100)
                     
-        transfer_progress[user_id]['status'] = 'done'  # Ensure we update to 'done' after receiving
+        transfer_progress[user_id]['status'] = 'done'
+        transfer_progress[user_id]['filename'] = filename
     except Exception as e:
         transfer_progress[user_id] = {'status': 'error', 'message': str(e)}
 
@@ -73,7 +105,7 @@ def index():
     try:
         response = supabase.table('users').select("*").execute()
         users = response.data
-        if 'message' in users:  # Handling error message
+        if isinstance(users, dict) and 'message' in users:  # Handling error message
             flash(f"Error: {users['message']}", "danger")
             return redirect(url_for('index'))
         return render_template('index.html', users=users)
@@ -132,30 +164,44 @@ def signup():
 @app.route('/generate_key', methods=['POST'])
 def generate_key():
     user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+        
     key = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-    supabase.table('users').update({'pairing_key': key}).eq("id", user_id).execute()
-    return jsonify({'pairing_key': key})
+    try:
+        supabase.table('users').update({'pairing_key': key}).eq("id", user_id).execute()
+        return jsonify({'pairing_key': key})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/pair', methods=['POST'])
 def pair():
     user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+        
     target_key = request.json.get('pairing_key')
+    if not target_key:
+        return jsonify({'error': 'No pairing key provided'}), 400
 
-    partner_resp = supabase.table('users').select("*").eq("pairing_key", target_key).single().execute()
-    if not partner_resp.data:
-        return jsonify({'error': 'Invalid pairing key'}), 404
+    try:
+        partner_resp = supabase.table('users').select("*").eq("pairing_key", target_key).single().execute()
+        if not partner_resp.data:
+            return jsonify({'error': 'Invalid pairing key'}), 404
 
-    partner = partner_resp.data
-    supabase.table('users').update({
-        "paired_with_id": partner['id'],
-        "partner_ip": partner['local_ip']
-    }).eq("id", user_id).execute()
+        partner = partner_resp.data
+        supabase.table('users').update({
+            "paired_with_id": partner['id'],
+            "partner_ip": partner['local_ip']
+        }).eq("id", user_id).execute()
 
-    return jsonify({
-        'status': 'paired',
-        'partner_username': partner['username'],
-        'partner_ip': partner['local_ip']
-    })
+        return jsonify({
+            'status': 'paired',
+            'partner_username': partner['username'],
+            'partner_ip': partner['local_ip']
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/file_sharing')
 def file_sharing():
@@ -163,37 +209,69 @@ def file_sharing():
     if not user_id:
         return redirect(url_for('login'))
 
-    user = supabase.table('users').select("*").eq("id", user_id).single().execute().data
-    partner = None
-    if user.get('paired_with_id'):
-        partner = supabase.table('users').select("*").eq("id", user['paired_with_id']).single().execute().data
+    try:
+        user = supabase.table('users').select("*").eq("id", user_id).single().execute().data
+        partner = None
+        if user.get('paired_with_id'):
+            partner = supabase.table('users').select("*").eq("id", user['paired_with_id']).single().execute().data
 
-    return render_template('file_sharing.html', user=user, partner=partner)
+        return render_template('file_sharing.html', user=user, partner=partner)
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+        return redirect(url_for('login'))
 
 @app.route('/start_send', methods=['POST'])
 def start_send():
     user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+        
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+        
     file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
     filename = secure_filename(file.filename)
     os.makedirs('temp', exist_ok=True)
     temp_path = os.path.join('temp', filename)
-    file.save(temp_path)
-
-    threading.Thread(target=send_file_to_partner, args=(temp_path, user_id)).start()
-    return jsonify({'status': 'sending'})
+    
+    try:
+        file.save(temp_path)
+        threading.Thread(target=send_file_to_partner, args=(temp_path, user_id)).start()
+        return jsonify({'status': 'sending'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/start_receive', methods=['POST'])
 def start_receive():
     user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+        
     save_dir = request.json.get('save_dir')
-    sender_ip = supabase.table('users').select("partner_ip").eq("id", user_id).single().execute().data.get('partner_ip')
-
-    threading.Thread(target=receive_file_from_sender, args=(save_dir, sender_ip, user_id)).start()
-    return jsonify({'status': 'connecting'})
+    if not save_dir:
+        save_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
+    
+    try:
+        user_data = supabase.table('users').select("partner_ip").eq("id", user_id).single().execute().data
+        sender_ip = user_data.get('partner_ip')
+        
+        if not sender_ip:
+            return jsonify({'error': 'Partner IP not found'}), 404
+            
+        threading.Thread(target=receive_file_from_sender, args=(save_dir, sender_ip, user_id)).start()
+        return jsonify({'status': 'connecting'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/progress')
 def progress():
     user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+        
     return jsonify(transfer_progress.get(user_id, {}))
 
 # Edit user
@@ -231,8 +309,6 @@ def delete(id):
     except Exception as e:
         flash(f"Error: {str(e)}", "danger")
     return redirect(url_for('index'))
-
-
 
 
 def get_local_ip():
