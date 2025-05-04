@@ -5,6 +5,14 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from werkzeug.security import generate_password_hash, check_password_hash
 from supabase import create_client, Client
 import sys
+import threading
+import os
+from werkzeug.utils import secure_filename
+
+transfer_progress = {}
+
+
+
 
 # Supabase config
 SUPABASE_URL = 'https://tifjokcxqabavfqngbyq.supabase.co'
@@ -13,6 +21,79 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secretkey'
+
+def send_file_to_partner(file_path, partner_ip, sender_id):
+    try:
+        filesize = os.path.getsize(file_path)
+        transfer_progress[sender_id] = {'status': 'sending', 'progress': 0}
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((partner_ip, 9090))
+            with open(file_path, 'rb') as f:
+                sent = 0
+                while True:
+                    data = f.read(4096)
+                    if not data:
+                        break
+                    s.sendall(data)
+                    sent += len(data)
+                    transfer_progress[sender_id]['progress'] = int((sent / filesize) * 100)
+
+        transfer_progress[sender_id]['status'] = 'done'
+    except Exception as e:
+        transfer_progress[sender_id] = {'status': 'error', 'message': str(e)}
+
+def receive_file_on_port(save_dir, user_id):
+    try:
+        os.makedirs(save_dir, exist_ok=True)
+        transfer_progress[user_id] = {'status': 'receiving', 'progress': 0}
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('', 9090))
+            s.listen(1)
+            conn, addr = s.accept()
+            with conn:
+                file_path = os.path.join(save_dir, f"received_file_{user_id}")
+                with open(file_path, 'wb') as f:
+                    received = 0
+                    while True:
+                        data = conn.recv(4096)
+                        if not data:
+                            break
+                        f.write(data)
+                        received += len(data)
+                        # No known total size, so we can't show percentage here
+                        transfer_progress[user_id]['progress'] = received  # Optional: show bytes
+        transfer_progress[user_id]['status'] = 'done'
+    except Exception as e:
+        transfer_progress[user_id] = {'status': 'error', 'message': str(e)}
+@app.route('/start_send', methods=['POST'])
+def start_send():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    filename = secure_filename(file.filename)
+    temp_path = os.path.join('temp', filename)
+    os.makedirs('temp', exist_ok=True)
+    file.save(temp_path)
+
+    # Get partner IP
+    user_resp = supabase.table('users').select("*").eq("id", user_id).single().execute()
+    partner_ip = user_resp.data.get('partner_ip')
+
+    thread = threading.Thread(target=send_file_to_partner, args=(temp_path, partner_ip, user_id))
+    thread.start()
+
+    return jsonify({'status': 'sending'})
+
 
 
 def get_local_ip():

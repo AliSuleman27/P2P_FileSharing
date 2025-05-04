@@ -71,6 +71,16 @@
     </div>
 </div>
 
+<div id="progressContainer" class="w-full mt-8 hidden">
+    <p class="text-lg font-semibold mb-2 text-gray-700">Transfer Progress</p>
+    <div class="w-full bg-gray-200 rounded-full h-6">
+        <div id="progressBar" class="bg-blue-600 h-6 rounded-full text-white text-sm text-center leading-6" style="width: 0%;">
+            0%
+        </div>
+    </div>
+</div>
+
+
 <script>
     // Handle pairing key generation via AJAX
     document.getElementById('generateKeyForm').addEventListener('submit', function(event) {
@@ -149,13 +159,63 @@
             modal.classList.add('hidden');
         }, 300);
     }
+    function updateProgress() {
+    fetch('/progress')
+        .then(res => res.json())
+        .then(data => {
+            if (data.status && data.status !== 'done') {
+                document.getElementById("progressContainer").classList.remove("hidden");
+                document.getElementById("progressBar").style.width = data.progress + "%";
+                document.getElementById("progressBar").textContent = data.progress + "%";
+                setTimeout(updateProgress, 1000);
+            } else if (data.status === 'done') {
+                document.getElementById("progressBar").style.width = "100%";
+                document.getElementById("progressBar").textContent = "Completed";
+            }
+        });
+}
 
-    function sendFile() {
-        alert('File send functionality will be implemented here.');
-    }
+function sendFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.onchange = e => {
+        const file = e.target.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
 
-    function receiveFile() {
-        alert('File receive functionality will be implemented here.');
-    }
+        fetch('/start_send', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'sending') {
+                updateProgress();
+            } else {
+                alert("Error: " + (data.error || "unknown"));
+            }
+        });
+    };
+    input.click();
+}
+
+function receiveFile() {
+    const folder = prompt("Enter full directory path to save the file (e.g. C:\\Users\\You\\Downloads or /home/you/Downloads):");
+    if (!folder) return;
+
+    fetch('/start_receive', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ save_dir: folder })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'listening') {
+            updateProgress();
+        } else {
+            alert("Error: " + (data.error || "unknown"));
+        }
+    });
+}
 </script>
 {% endblock %}
