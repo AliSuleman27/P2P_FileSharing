@@ -19,7 +19,6 @@ app.config['SECRET_KEY'] = 'yoursecret'
 transfer_progress = {}
 
 # ========= File Transfer Logic =========
-
 def send_file_to_partner(file_path, user_id):
     try:
         filesize = os.path.getsize(file_path)
@@ -65,6 +64,7 @@ def receive_file_from_sender(save_dir, sender_ip, user_id):
         transfer_progress[user_id]['status'] = 'done'  # Ensure we update to 'done' after receiving
     except Exception as e:
         transfer_progress[user_id] = {'status': 'error', 'message': str(e)}
+
 
 # ========= Routes =========
 
