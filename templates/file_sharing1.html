@@ -1,0 +1,237 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="flex flex-wrap justify-center gap-8 p-8">
+    <!-- User Details -->
+    <div class="w-full md:w-1/3 p-8 bg-white rounded-lg shadow-xl">
+        <h2 class="text-3xl font-semibold mb-6 text-gray-800">User Details</h2>
+        <p class="text-lg mb-4"><strong>Username:</strong> {{ user.username }}</p>
+        <p class="text-lg mb-4"><strong>Email:</strong> {{ user.email }}</p>
+        <p class="text-lg mb-4"><strong>Your IP:</strong> {{ user.local_ip or "No IP assigned yet" }}</p>
+        <p id="pairingKeyDisplay" class="text-lg">
+            <strong>Pairing Key:</strong> {{ user.pairing_key or "No pairing key yet" }}
+        </p>
+    </div>
+
+    <!-- File Sharing Buttons and Pairing Form -->
+    <div class="w-full md:w-2/3 p-8 bg-white rounded-lg shadow-xl flex justify-center flex-col items-center gap-8">
+        <h3 class="text-2xl font-medium text-gray-800 mb-6">File Sharing</h3>
+        
+        <!-- Form to Enter Partner's Pairing Key -->
+        <div class="w-full mb-8">
+            <h4 class="text-xl font-semibold mb-4">Pair with a Partner</h4>
+            <form id="pairingForm" method="POST">
+                <input type="text" id="pairingKeyInput" class="p-3 w-full border rounded-lg" placeholder="Enter Partner's Pairing Key" required>
+                <button type="submit" class="p-3 w-full mt-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none">
+                    Pair with Partner
+                </button>
+            </form>
+        </div>
+        
+        <div class="flex gap-6">
+            <!-- Generate Pairing Key Button -->
+            <form id="generateKeyForm" method="POST">
+                <button type="submit" class="p-6 px-8 bg-blue-600 text-white font-medium rounded-full shadow-md hover:bg-blue-700 transition-all duration-300 focus:outline-none">
+                    Generate Pairing Key
+                </button>
+            </form>
+            <!-- Dummy Buttons -->
+            <button onclick="sendFile()" class="p-6 px-8 bg-green-600 text-white font-medium rounded-full shadow-md hover:bg-green-700 transition-all duration-300 focus:outline-none">
+                Send File
+            </button>
+            <button onclick="receiveFile()" class="p-6 px-8 bg-purple-600 text-white font-medium rounded-full shadow-md hover:bg-purple-700 transition-all duration-300 focus:outline-none">
+                Receive File
+            </button>
+        </div>
+        <p class="text-lg text-gray-600 mt-4">Click 'Generate Pairing Key' to get your unique key.</p>
+
+        {% if partner %}
+        <div class="mt-8">
+            <h4 class="text-lg font-semibold">Partner Information</h4>
+            <p><strong>Partner Username:</strong> {{ partner.username }}</p>
+            <p><strong>Partner IP:</strong> {{ partner.partner_ip or "No partner IP yet" }}</p>
+        </div>
+        {% else %}
+        <div class="mt-8">
+            <p class="text-lg font-semibold text-red-600">You are not paired with anyone yet.</p>
+            <p>Use the pairing key to connect with another user.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="pairingKeyModal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex justify-center items-center">
+    <div class="bg-white p-8 rounded-lg shadow-xl text-center transform scale-95 opacity-0 transition-all duration-300" id="modalContent">
+        <h3 class="text-2xl font-semibold mb-4 text-gray-800">Your Pairing Key</h3>
+        <p id="pairingKey" class="text-xl font-bold mb-6 text-gray-800">{{ user.pairing_key or "" }}</p>
+        <button onclick="closeModal()" class="bg-blue-600 text-white px-6 py-3 rounded-full hover:bg-blue-700 focus:outline-none">
+            Close
+        </button>
+    </div>
+</div>
+
+<div id="progressContainer" class="w-full mt-8 hidden">
+    <p class="text-lg font-semibold mb-2 text-gray-700">Transfer Progress</p>
+    <div class="w-full bg-gray-200 rounded-full h-6">
+        <div id="progressBar" class="bg-blue-600 h-6 rounded-full text-white text-sm text-center leading-6" style="width: 0%;">
+            0%
+        </div>
+    </div>
+</div>
+
+
+<script>
+    // ---------------------- Pairing Key Generation ----------------------
+    document.getElementById('generateKeyForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        fetch('/generate_key', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.pairing_key) {
+                document.getElementById('pairingKey').textContent = data.pairing_key;
+                document.getElementById('pairingKeyDisplay').innerHTML = `<strong>Pairing Key:</strong> ${data.pairing_key}`;
+                showModal();
+            } else {
+                alert("Error generating pairing key.");
+            }
+        })
+        .catch(error => {
+            console.error("AJAX Error:", error);
+            alert("Something went wrong while generating the key.");
+        });
+    });
+    
+    // ---------------------- Pair with Partner ----------------------
+    document.getElementById('pairingForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const pairingKey = document.getElementById('pairingKeyInput').value;
+    
+        fetch('/pair', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pairing_key: pairingKey })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'paired') {
+                alert("Successfully paired with " + data.partner_username);
+                document.querySelector(".mt-8").innerHTML = `
+                    <h4 class="text-lg font-semibold">Partner Information</h4>
+                    <p><strong>Partner Username:</strong> ${data.partner_username}</p>
+                    <p><strong>Partner IP:</strong> ${data.partner_ip}</p>
+                `;
+            } else {
+                alert(data.error || "Error pairing with partner.");
+            }
+        })
+        .catch(error => {
+            console.error("AJAX Error:", error);
+            alert("Something went wrong while pairing.");
+        });
+    });
+    
+    // ---------------------- Modal Display ----------------------
+    function showModal() {
+        const modal = document.getElementById('pairingKeyModal');
+        const modalContent = document.getElementById('modalContent');
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modalContent.classList.remove('scale-95', 'opacity-0');
+            modalContent.classList.add('scale-100', 'opacity-100');
+        }, 50);
+    }
+    
+    function closeModal() {
+        const modal = document.getElementById('pairingKeyModal');
+        const modalContent = document.getElementById('modalContent');
+        modalContent.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 300);
+    }
+    
+    // ---------------------- Progress Polling ----------------------
+    function updateProgress() {
+        document.getElementById("progressContainer").classList.remove("hidden");
+    
+        fetch('/progress')
+            .then(res => res.json())
+            .then(data => {
+                const bar = document.getElementById("progressBar");
+    
+                if (data.status && data.status !== 'done') {
+                    bar.style.width = data.progress + "%";
+                    bar.textContent = data.progress + "%";
+                    setTimeout(updateProgress, 1000);
+                } else if (data.status === 'done') {
+                    bar.style.width = "100%";
+                    bar.textContent = "Completed";
+                }
+            })
+            .catch(err => {
+                console.error("Progress fetch failed:", err);
+            });
+    }
+    
+    // ---------------------- Send File ----------------------
+    function sendFile() {
+        const input = document.createElement('input');
+        input.type = 'file';
+    
+        input.onchange = e => {
+            const file = e.target.files[0];
+            if (!file) return;
+    
+            const formData = new FormData();
+            formData.append('file', file);
+    
+            fetch('/start_send', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'sending') {
+                    updateProgress();
+                } else {
+                    alert("Error: " + (data.error || "Unknown send error"));
+                }
+            })
+            .catch(err => {
+                console.error("Send error:", err);
+                alert("Failed to initiate file send.");
+            });
+        };
+    
+        input.click();
+    }
+    
+    // ---------------------- Receive File ----------------------
+    function receiveFile() {
+        const folder = prompt("Enter full directory path to save the file (e.g. C:\\Users\\You\\Downloads or /home/you/Downloads):");
+        if (!folder) return;
+    
+        fetch('/start_receive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ save_dir: folder })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'listening') {
+                updateProgress();
+            } else {
+                alert("Error: " + (data.error || "Unknown receive error"));
+            }
+        })
+        .catch(err => {
+            console.error("Receive error:", err);
+            alert("Failed to initiate file receive.");
+        });
+    }
+    </script>
+    {% endblock %}
