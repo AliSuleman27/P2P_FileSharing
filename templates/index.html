@@ -1,0 +1,30 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<h1 class="text-4xl font-bold mb-8 text-center text-gray-800 animate__animated animate__fadeIn">Welcome to ShareHere.com</h1>
+
+<!-- Users Table -->
+<div class="overflow-x-auto bg-white shadow-lg rounded-lg border border-gray-200">
+    <table class="min-w-full bg-white table-auto border-collapse">
+        <thead class="bg-blue-600 text-white">
+            <tr>
+                <th class="py-3 px-6 text-left text-sm font-semibold">Username</th>
+                <th class="py-3 px-6 text-left text-sm font-semibold">Email</th>
+                <th class="py-3 px-6 text-left text-sm font-semibold">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="text-gray-700">
+            {% for user in users %}
+            <tr class="border-b hover:bg-blue-50 transition transform duration-300 hover:scale-105">
+                <td class="py-3 px-6">{{ user.username }}</td>
+                <td class="py-3 px-6">{{ user.email }}</td>
+                <td class="py-3 px-6">
+                    <a href="/edit/{{ user.id }}" class="text-blue-600 hover:text-blue-800 transition duration-200 transform hover:scale-110">Edit</a> |
+                    <a href="/delete/{{ user.id }}" class="text-red-600 hover:text-red-800 transition duration-200 transform hover:scale-110">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

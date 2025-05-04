@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShareHere.com</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4c8bf5;
+            border-radius: 4px;
+        }
+        /* Input focus animation */
+        input:focus, button:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6); /* Blue focus glow */
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 font-sans antialiased">
+
+    <!-- Navigation Bar -->
+    <nav class="bg-blue-800 p-4 shadow-md sticky top-0 z-10">
+        <div class="container mx-auto flex justify-between items-center">
+            <a href="/" class="text-3xl font-extrabold text-white tracking-tight hover:text-blue-400 transition duration-300">ShareHere.com</a>
+            <div class="space-x-6">
+                <a href="/login" class="text-lg text-white hover:text-blue-300 transition duration-300">Login</a>
+                <a href="/signup" class="text-lg text-white hover:text-blue-300 transition duration-300">Sign Up</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Section -->
+    <main class="container mx-auto p-6">
+        {% block content %}{% endblock %}
+    </main>
+
+</body>
+
+</html>

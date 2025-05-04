@@ -1,0 +1,152 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="flex flex-wrap justify-center gap-8 p-8">
+    <!-- User Details -->
+    <div class="w-full md:w-1/3 p-8 bg-white rounded-lg shadow-xl">
+        <h2 class="text-3xl font-semibold mb-6 text-gray-800">User Details</h2>
+        <p class="text-lg mb-4"><strong>Username:</strong> {{ user.username }}</p>
+        <p class="text-lg mb-4"><strong>Email:</strong> {{ user.email }}</p>
+        <p id="pairingKeyDisplay" class="text-lg"><strong>Pairing Key:</strong> {{ user.pairing_key or "No pairing key yet" }}</p>
+
+        <!-- Pairing Status -->
+        <div id="pairStatus" class="mt-6 text-lg text-gray-700">
+            {% if user.paired_user %}
+                <p><strong>Paired with:</strong> {{ user.paired_user.username }}</p>
+                <p><strong>Partner IP:</strong> {{ user.paired_user.local_ip or "Unknown" }}</p>
+            {% else %}
+                <p><strong>Pairing Status:</strong> Not Paired</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- File Sharing Section -->
+    <div class="w-full md:w-2/3 p-8 bg-white rounded-lg shadow-xl flex justify-center flex-col items-center gap-8">
+        <h3 class="text-2xl font-medium text-gray-800 mb-6">File Sharing</h3>
+
+        <!-- Pairing Form -->
+        <form id="pairForm" class="flex gap-4 mb-4 w-full justify-center">
+            <input type="text" id="pairingKeyInput" placeholder="Enter pairing key"
+                class="p-3 border rounded-lg w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            <button type="submit"
+                class="p-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-all">
+                Pair
+            </button>
+        </form>
+
+        <!-- File Sharing Buttons -->
+        <div class="flex gap-6">
+            <!-- Generate Pairing Key Button -->
+            <form id="generateKeyForm" method="POST">
+                <button type="submit" class="p-6 px-8 bg-blue-600 text-white font-medium rounded-full shadow-md hover:bg-blue-700 transition-all duration-300 focus:outline-none">
+                    Generate Pairing Key
+                </button>
+            </form>
+            <!-- Dummy Buttons -->
+            <button onclick="sendFile()" class="p-6 px-8 bg-green-600 text-white font-medium rounded-full shadow-md hover:bg-green-700 transition-all duration-300 focus:outline-none">
+                Send File
+            </button>
+            <button onclick="receiveFile()" class="p-6 px-8 bg-purple-600 text-white font-medium rounded-full shadow-md hover:bg-purple-700 transition-all duration-300 focus:outline-none">
+                Receive File
+            </button>
+        </div>
+        <p class="text-lg text-gray-600 mt-4">Click 'Generate Pairing Key' to get your unique key.</p>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="pairingKeyModal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex justify-center items-center">
+    <div class="bg-white p-8 rounded-lg shadow-xl text-center transform scale-95 opacity-0 transition-all duration-300" id="modalContent">
+        <h3 class="text-2xl font-semibold mb-4 text-gray-800">Your Pairing Key</h3>
+        <p id="pairingKey" class="text-xl font-bold mb-6 text-gray-800">{{ user.pairing_key or "" }}</p>
+        <button onclick="closeModal()" class="bg-blue-600 text-white px-6 py-3 rounded-full hover:bg-blue-700 focus:outline-none">
+            Close
+        </button>
+    </div>
+</div>
+
+<script>
+    // Handle pairing key generation via AJAX
+    document.getElementById('generateKeyForm').addEventListener('submit', function(event) {
+        event.preventDefault(); // Prevent default form submission
+
+        fetch('/generate_key', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.pairing_key) {
+                document.getElementById('pairingKey').textContent = data.pairing_key;
+                document.getElementById('pairingKeyDisplay').innerHTML = `<strong>Pairing Key:</strong> ${data.pairing_key}`;
+                showModal();
+            } else {
+                alert("Error generating pairing key.");
+            }
+        })
+        .catch(error => {
+            console.error("AJAX Error:", error);
+            alert("Something went wrong while generating the key.");
+        });
+    });
+
+    // Handle pairing functionality
+    document.getElementById('pairForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const pairingKey = document.getElementById('pairingKeyInput').value;
+
+        fetch('/pair', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ pairing_key: pairingKey })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'paired') {
+                document.getElementById('pairStatus').innerHTML =
+                    `<p><strong>Paired with:</strong> ${data.partner_username}</p>
+                     <p><strong>Partner IP:</strong> ${data.partner_ip}</p>`;
+                alert("Paired successfully!");
+            } else {
+                alert("Pairing failed: " + (data.error || "Unknown error"));
+            }
+        })
+        .catch(err => {
+            console.error("Pairing error:", err);
+            alert("Pairing failed due to a network error.");
+        });
+    });
+
+    function showModal() {
+        const modal = document.getElementById('pairingKeyModal');
+        const modalContent = document.getElementById('modalContent');
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modalContent.classList.remove('scale-95', 'opacity-0');
+            modalContent.classList.add('scale-100', 'opacity-100');
+        }, 50);
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('pairingKeyModal');
+        const modalContent = document.getElementById('modalContent');
+        modalContent.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 300);
+    }
+
+    function sendFile() {
+        alert('File send functionality will be implemented here.');
+    }
+
+    function receiveFile() {
+        alert('File receive functionality will be implemented here.');
+    }
+</script>
+{% endblock %}
