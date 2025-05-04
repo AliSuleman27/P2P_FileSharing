@@ -246,33 +246,51 @@ def start_send():
 
 @app.route('/start_receive', methods=['POST'])
 def start_receive():
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({'error': 'Not logged in'}), 401
-        
-    save_dir = request.json.get('save_dir')
-    if not save_dir:
-        save_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
-    
     try:
-        user_data = supabase.table('users').select("partner_ip").eq("id", user_id).single().execute().data
-        sender_ip = user_data.get('partner_ip')
-        
-        if not sender_ip:
-            return jsonify({'error': 'Partner IP not found'}), 404
-            
-        threading.Thread(target=receive_file_from_sender, args=(save_dir, sender_ip, user_id)).start()
-        return jsonify({'status': 'connecting'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Get the save directory from the client
+        data = request.get_json()
+        save_dir = data['save_dir']
 
-@app.route('/progress')
+        # Create the directory if it doesn't exist
+        os.makedirs(save_dir, exist_ok=True)
+        file_path = os.path.join(save_dir, "received_file")
+
+        # Start receiving the file from the sender
+        def receive_file():
+            transfer_progress[session['user_id']] = {'status': 'listening', 'progress': 0}
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('', 9091))  # Listen on a different port for receiving
+                s.listen(1)
+                conn, addr = s.accept()
+                with conn:
+                    with open(file_path, 'wb') as f:
+                        total_received = 0
+                        while True:
+                            data = conn.recv(4096)
+                            if not data:
+                                break
+                            f.write(data)
+                            total_received += len(data)
+                            # Update progress (assuming total file size is known)
+                            transfer_progress[session['user_id']]['progress'] = int((total_received / (10 * 1024 * 1024)) * 100)
+                        transfer_progress[session['user_id']]['status'] = 'done'
+
+        # Start a separate thread to handle file receiving
+        threading.Thread(target=receive_file).start()
+
+        return jsonify({'status': 'listening'}), 200
+
+    except Exception as e:
+        transfer_progress[session['user_id']] = {'status': 'error', 'message': str(e)}
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/progress', methods=['GET'])
 def progress():
     user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({'error': 'Not logged in'}), 401
-        
-    return jsonify(transfer_progress.get(user_id, {}))
+    if user_id in transfer_progress:
+        return jsonify(transfer_progress[user_id])
+    return jsonify({'status': 'error', 'message': 'No progress data available'}), 404
 
 # Edit user
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])

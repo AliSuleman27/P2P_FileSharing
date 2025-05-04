@@ -120,30 +120,30 @@
     }
 
     function updateProgress() {
-        document.getElementById("progressContainer").classList.remove("hidden");
+    document.getElementById("progressContainer").classList.remove("hidden");
 
-        fetch('/progress')
-            .then(res => res.json())
-            .then(data => {
-                const bar = document.getElementById("progressBar");
-                const status = document.getElementById("transferStatus");
+    fetch('/progress')
+        .then(res => res.json())
+        .then(data => {
+            const bar = document.getElementById("progressBar");
+            const status = document.getElementById("transferStatus");
 
-                if (data.status && data.status !== 'done' && data.status !== 'error') {
-                    bar.style.width = data.progress + "%";
-                    bar.textContent = data.progress + "%";
-                    status.textContent = data.status;
-                    setTimeout(updateProgress, 1000);
-                } else if (data.status === 'done') {
-                    bar.style.width = "100%";
-                    bar.textContent = "Completed";
-                    status.textContent = "Transfer complete.";
-                } else if (data.status === 'error') {
-                    bar.style.width = "0%";
-                    bar.textContent = "Error";
-                    status.textContent = "Transfer failed.";
-                }
-            });
-    }
+            if (data.status && data.status !== 'done' && data.status !== 'error') {
+                bar.style.width = data.progress + "%";
+                bar.textContent = data.progress + "%";
+                status.textContent = data.status;
+                setTimeout(updateProgress, 1000);  // Recursively call updateProgress every 1 second
+            } else if (data.status === 'done') {
+                bar.style.width = "100%";
+                bar.textContent = "Completed";
+                status.textContent = "Transfer complete.";
+            } else if (data.status === 'error') {
+                bar.style.width = "0%";
+                bar.textContent = "Error";
+                status.textContent = "Transfer failed.";
+            }
+        });
+}
 
     function sendFile() {
         const input = document.createElement('input');
