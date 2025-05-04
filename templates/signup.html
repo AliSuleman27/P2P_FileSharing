@@ -3,6 +3,17 @@
 {% block content %}
 <div class="max-w-md mx-auto bg-white p-9 rounded-lg shadow-lg transform transition-all duration-500 hover:scale-105 hover:shadow-xl">
     <h2 class="text-2xl font-semibold mb-6 text-center text-gray-800 animate__animated animate__fadeIn">Join ShareHere.com</h2>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class="mb-6">
+            {% for category, message in messages %}
+                <li class="text-center p-2 {{ 'text-green-600' if category == 'success' else 'text-red-600' }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+    
     <form method="POST" class="space-y-6">
         <div class="transition duration-300 ease-in-out transform hover:scale-105">
             <label for="username" class="block text-sm font-medium text-gray-700">Username</label>

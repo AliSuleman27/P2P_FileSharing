@@ -3,6 +3,17 @@
 {% block content %}
 <div class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-lg transform transition-all duration-500 hover:scale-105 hover:shadow-xl">
     <h2 class="text-3xl font-semibold mb-6 text-center text-gray-800 animate__animated animate__fadeIn">Welcome Back to ShareHere.com</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class="mb-6">
+            {% for category, message in messages %}
+                <li class="text-center p-2 {{ 'text-green-600' if category == 'success' else 'text-red-600' }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
     <form method="POST" class="space-y-6">
         <div class="transition duration-300 ease-in-out transform hover:scale-105">
             <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
@@ -13,7 +24,7 @@
             <input type="password" name="password" id="password" class="w-full p-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200" required>
         </div>
         <div>
-            <button type="submit" class="w-full bg-blue-800 text-white p-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transform hover:scale-110 transition duration-200">Login</button>
+            <button type="submit" class="w-full bg-green-600 text-white p-4 rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 transform hover:scale-110 transition duration-200">Login</button>
         </div>
     </form>
     <div class="mt-4 text-center">

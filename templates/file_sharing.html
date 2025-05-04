@@ -7,34 +7,27 @@
         <h2 class="text-3xl font-semibold mb-6 text-gray-800">User Details</h2>
         <p class="text-lg mb-4"><strong>Username:</strong> {{ user.username }}</p>
         <p class="text-lg mb-4"><strong>Email:</strong> {{ user.email }}</p>
-        <p id="pairingKeyDisplay" class="text-lg"><strong>Pairing Key:</strong> {{ user.pairing_key or "No pairing key yet" }}</p>
-
-        <!-- Pairing Status -->
-        <div id="pairStatus" class="mt-6 text-lg text-gray-700">
-            {% if user.paired_user %}
-                <p><strong>Paired with:</strong> {{ user.paired_user.username }}</p>
-                <p><strong>Partner IP:</strong> {{ user.paired_user.local_ip or "Unknown" }}</p>
-            {% else %}
-                <p><strong>Pairing Status:</strong> Not Paired</p>
-            {% endif %}
-        </div>
+        <p class="text-lg mb-4"><strong>Your IP:</strong> {{ user.local_ip or "No IP assigned yet" }}</p>
+        <p id="pairingKeyDisplay" class="text-lg">
+            <strong>Pairing Key:</strong> {{ user.pairing_key or "No pairing key yet" }}
+        </p>
     </div>
 
-    <!-- File Sharing Section -->
+    <!-- File Sharing Buttons and Pairing Form -->
     <div class="w-full md:w-2/3 p-8 bg-white rounded-lg shadow-xl flex justify-center flex-col items-center gap-8">
         <h3 class="text-2xl font-medium text-gray-800 mb-6">File Sharing</h3>
-
-        <!-- Pairing Form -->
-        <form id="pairForm" class="flex gap-4 mb-4 w-full justify-center">
-            <input type="text" id="pairingKeyInput" placeholder="Enter pairing key"
-                class="p-3 border rounded-lg w-2/3 focus:outline-none focus:ring-2 focus:ring-blue-400" />
-            <button type="submit"
-                class="p-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-all">
-                Pair
-            </button>
-        </form>
-
-        <!-- File Sharing Buttons -->
+        
+        <!-- Form to Enter Partner's Pairing Key -->
+        <div class="w-full mb-8">
+            <h4 class="text-xl font-semibold mb-4">Pair with a Partner</h4>
+            <form id="pairingForm" method="POST">
+                <input type="text" id="pairingKeyInput" class="p-3 w-full border rounded-lg" placeholder="Enter Partner's Pairing Key" required>
+                <button type="submit" class="p-3 w-full mt-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none">
+                    Pair with Partner
+                </button>
+            </form>
+        </div>
+        
         <div class="flex gap-6">
             <!-- Generate Pairing Key Button -->
             <form id="generateKeyForm" method="POST">
@@ -51,6 +44,19 @@
             </button>
         </div>
         <p class="text-lg text-gray-600 mt-4">Click 'Generate Pairing Key' to get your unique key.</p>
+
+        {% if partner %}
+        <div class="mt-8">
+            <h4 class="text-lg font-semibold">Partner Information</h4>
+            <p><strong>Partner Username:</strong> {{ partner.username }}</p>
+            <p><strong>Partner IP:</strong> {{ partner.partner_ip or "No partner IP yet" }}</p>
+        </div>
+        {% else %}
+        <div class="mt-8">
+            <p class="text-lg font-semibold text-red-600">You are not paired with anyone yet.</p>
+            <p>Use the pairing key to connect with another user.</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -79,6 +85,7 @@
         .then(response => response.json())
         .then(data => {
             if (data.pairing_key) {
+                // Update modal and on-page key
                 document.getElementById('pairingKey').textContent = data.pairing_key;
                 document.getElementById('pairingKeyDisplay').innerHTML = `<strong>Pairing Key:</strong> ${data.pairing_key}`;
                 showModal();
@@ -92,33 +99,35 @@
         });
     });
 
-    // Handle pairing functionality
-    document.getElementById('pairForm').addEventListener('submit', function(event) {
-        event.preventDefault();
+    // Handle the pairing process (Submit partner's pairing key)
+    document.getElementById('pairingForm').addEventListener('submit', function(event) {
+        event.preventDefault(); // Prevent default form submission
         const pairingKey = document.getElementById('pairingKeyInput').value;
 
         fetch('/pair', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({ pairing_key: pairingKey })
         })
         .then(response => response.json())
         .then(data => {
             if (data.status === 'paired') {
-                document.getElementById('pairStatus').innerHTML =
-                    `<p><strong>Paired with:</strong> ${data.partner_username}</p>
-                     <p><strong>Partner IP:</strong> ${data.partner_ip}</p>`;
-                alert("Paired successfully!");
+                alert("Successfully paired with " + data.partner_username);
+                // Update the page with partner information
+                document.querySelector(".mt-8").innerHTML = `
+                    <h4 class="text-lg font-semibold">Partner Information</h4>
+                    <p><strong>Partner Username:</strong> ${data.partner_username}</p>
+                    <p><strong>Partner IP:</strong> ${data.partner_ip}</p>
+                `;
             } else {
-                alert("Pairing failed: " + (data.error || "Unknown error"));
+                alert(data.error || "Error pairing with partner.");
             }
         })
-        .catch(err => {
-            console.error("Pairing error:", err);
-            alert("Pairing failed due to a network error.");
+        .catch(error => {
+            console.error("AJAX Error:", error);
+            alert("Something went wrong while pairing.");
         });
     });
 
