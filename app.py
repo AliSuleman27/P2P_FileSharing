@@ -144,16 +144,13 @@ def pair():
 
         partner = partner_resp.data
         partner_id = partner['id']
+        partner_ip = partner['local_ip']
 
         # Update both users
         supabase.table('users').update({
             "paired_with_id": partner_id,
-            "local_ip": request.remote_addr
+            "partner_ip" : partner_ip 
         }).eq("id", user_id).execute()
-
-        supabase.table('users').update({
-            "paired_with_id": user_id
-        }).eq("id", partner_id).execute()
 
         return jsonify({
             'status': 'paired',
