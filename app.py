@@ -19,6 +19,7 @@ SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'yoursecret'
 transfer_progress = {}
 
 # ========= File Transfer Logic =========
