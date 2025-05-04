@@ -8,14 +8,17 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from supabase import create_client, Client
+from dotenv import load_dotenv
+import os
 
+
+load_dotenv()
 # Supabase config
-SUPABASE_URL = 'https://tifjokcxqabavfqngbyq.supabase.co'
-SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpZmpva2N4cWFiYXZmcW5nYnlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYzNTU4MDMsImV4cCI6MjA2MTkzMTgwM30.LyNUwHyjUvPhqrcBv6YREBo5ok5rmLjOdsiJMv2ZaeA'
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'yoursecret'
 transfer_progress = {}
 
 # ========= File Transfer Logic =========
